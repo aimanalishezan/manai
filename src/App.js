@@ -1,63 +1,93 @@
-// src/App.js
-import React, { useState } from "react";
-import "./App.css";
+import React, { useState, useRef, useEffect } from 'react';
+import './App.css';
 
-const API_URL = "https://abc123.gradio.live/api/predict"; // Replace with your Gradio live link
+const API_URL = "https://b53983565c822a9d52.gradio.live/"; // Replace with your live Gradio link
 
 function App() {
-  const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
+  const [messages, setMessages] = useState([]);
+  const chatEndRef = useRef(null);
 
-  const sendMessage = async () => {
-    if (!input) return;
+  const scrollToBottom = () => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    if (!input.trim()) return;
 
     const newMessages = [...messages, { role: "user", content: input }];
     setMessages(newMessages);
-    setInput("");
+
+    const payload = {
+      data: [
+        input,
+        newMessages
+          .filter(m => m.role === "user" || m.role === "assistant")
+          .map((m, idx, arr) => {
+            if (m.role === "user") {
+              const reply = arr[idx + 1]?.role === "assistant" ? arr[idx + 1].content : "";
+              return [m.content, reply];
+            }
+            return null;
+          })
+          .filter(Boolean)
+      ]
+    };
 
     try {
-      const res = await fetch(API_URL, {
+      const response = await fetch(API_URL, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
         },
-        body: JSON.stringify({
-          data: [input, messages.map(msg => [msg.content, ""])]
-        })
+        body: JSON.stringify(payload)
       });
 
-      const json = await res.json();
-      const reply = json.data[0];
+      const result = await response.json();
+      const reply = result?.data || "No response";
 
-      setMessages((prev) => [...prev, { role: "ai", content: reply }]);
+      setMessages(prev => [...prev, { role: "assistant", content: reply }]);
+      setInput("");
     } catch (err) {
       console.error("Error:", err);
     }
   };
 
   return (
-    <div className="app">
-      <header>
-        <h1>🤖 MAN.AI</h1>
-        <p>Developed by Ai.MAN</p>
+    <div className="app-wrapper">
+      <header className="chat-header">
+        <h2>MAN.AI</h2>
+        <span>by Ai.MAN</span>
       </header>
-      <div className="chat-box">
-        {messages.map((msg, idx) => (
-          <div key={idx} className={`msg ${msg.role}`}>
-            <b>{msg.role === "user" ? "You" : "MAN.AI"}</b>: {msg.content}
-          </div>
-        ))}
+
+      <div className="chat-window">
+        <div className="chat-messages">
+          {messages.map((msg, idx) => (
+            <div
+              key={idx}
+              className={`chat-bubble ${msg.role === "user" ? "user-bubble" : "bot-bubble"}`}
+            >
+              {msg.content}
+            </div>
+          ))}
+          <div ref={chatEndRef} />
+        </div>
       </div>
-      <div className="input-box">
+
+      <form className="chat-input" onSubmit={handleSubmit}>
         <input
-          type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && sendMessage()}
           placeholder="Type your message..."
         />
-        <button onClick={sendMessage}>Send</button>
-      </div>
+        <button type="submit">Send</button>
+      </form>
     </div>
   );
 }
